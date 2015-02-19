@@ -127,6 +127,20 @@ impl<T> VecDeque<T> {
     #[inline]
     fn wrap_index(&self, idx: usize) -> usize { wrap_index(idx, self.cap) }
 
+    /// Returns the index in the underlying buffer for a given logical element
+    /// index + addend.
+    #[inline]
+    fn wrap_add(&self, idx: usize, addend: usize) -> usize {
+        wrap_index(idx.wrapping_add(addend), self.cap)
+    }
+
+    /// Returns the index in the underlying buffer for a given logical element
+    /// index - subtrahend.
+    #[inline]
+    fn wrap_sub(&self, idx: usize, subtrahend: usize) -> usize {
+        wrap_index(idx.wrapping_sub(subtrahend), self.cap)
+    }
+
     /// Copies a contiguous block of memory len long from src to dst
     #[inline]
     unsafe fn copy(&self, dst: usize, src: usize, len: usize) {
@@ -204,7 +218,7 @@ impl<T> VecDeque<T> {
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn get(&self, i: usize) -> Option<&T> {
         if i < self.len() {
-            let idx = self.wrap_index(self.tail + i);
+            let idx = self.wrap_add(self.tail, i);
             unsafe { Some(&*self.ptr.offset(idx as isize)) }
         } else {
             None
@@ -234,7 +248,7 @@ impl<T> VecDeque<T> {
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn get_mut(&mut self, i: usize) -> Option<&mut T> {
         if i < self.len() {
-            let idx = self.wrap_index(self.tail + i);
+            let idx = self.wrap_add(self.tail, i);
             unsafe { Some(&mut *self.ptr.offset(idx as isize)) }
         } else {
             None
@@ -264,8 +278,8 @@ impl<T> VecDeque<T> {
     pub fn swap(&mut self, i: usize, j: usize) {
         assert!(i < self.len());
         assert!(j < self.len());
-        let ri = self.wrap_index(self.tail + i);
-        let rj = self.wrap_index(self.tail + j);
+        let ri = self.wrap_add(self.tail, i);
+        let rj = self.wrap_add(self.tail, j);
         unsafe {
             ptr::swap(self.ptr.offset(ri as isize), self.ptr.offset(rj as isize))
         }
@@ -434,7 +448,7 @@ impl<T> VecDeque<T> {
                 //   [. . . o o o o o o o . . . . . . ]
                 //        H T
                 //   [o o . o o o o o ]
-                let len = self.wrap_index(self.head - target_cap);
+                let len = self.wrap_sub(self.head, target_cap);
                 unsafe {
                     self.copy_nonoverlapping(0, target_cap, len);
                 }
@@ -445,7 +459,7 @@ impl<T> VecDeque<T> {
                 //   [o o o o o . . . . . . . . . o o ]
                 //              H T
                 //   [o o o o o . o o ]
-                debug_assert!(self.wrap_index(self.head - 1) < target_cap);
+                debug_assert!(self.wrap_sub(self.head, 1) < target_cap);
                 let len = self.cap - self.tail;
                 let new_tail = target_cap - len;
                 unsafe {
@@ -784,7 +798,7 @@ impl<T> VecDeque<T> {
             None
         } else {
             let tail = self.tail;
-            self.tail = self.wrap_index(self.tail + 1);
+            self.tail = self.wrap_add(self.tail, 1);
             unsafe { Some(self.buffer_read(tail)) }
         }
     }
@@ -808,7 +822,7 @@ impl<T> VecDeque<T> {
             debug_assert!(!self.is_full());
         }
 
-        self.tail = self.wrap_index(self.tail.wrapping_sub(1));
+        self.tail = self.wrap_sub(self.tail, 1);
         let tail = self.tail;
         unsafe { self.buffer_write(tail, t); }
     }
@@ -833,7 +847,7 @@ impl<T> VecDeque<T> {
         }
 
         let head = self.head;
-        self.head = self.wrap_index(self.head + 1);
+        self.head = self.wrap_add(self.head, 1);
         unsafe { self.buffer_write(head, t) }
     }
 
@@ -856,7 +870,7 @@ impl<T> VecDeque<T> {
         if self.is_empty() {
             None
         } else {
-            self.head = self.wrap_index(self.head - 1);
+            self.head = self.wrap_sub(self.head, 1);
             let head = self.head;
             unsafe { Some(self.buffer_read(head)) }
         }
@@ -980,7 +994,7 @@ impl<T> VecDeque<T> {
         //      A - The element that should be after the insertion point
         //      M - Indicates element was moved
 
-        let idx = self.wrap_index(self.tail + i);
+        let idx = self.wrap_add(self.tail, i);
 
         let distance_to_tail = i;
         let distance_to_head = self.len() - i;
@@ -999,7 +1013,7 @@ impl<T> VecDeque<T> {
                 //      [A o o o o o o o . . . . . I]
                 //
 
-                self.tail = self.wrap_index(self.tail - 1);
+                self.tail = self.wrap_sub(self.tail, 1);
             },
             (true, true, _) => unsafe {
                 // contiguous, insert closer to tail:
@@ -1021,7 +1035,7 @@ impl<T> VecDeque<T> {
                 //      [o I A o o o o o . . . . . . . o]
                 //       M                             M
 
-                let new_tail = self.wrap_index(self.tail - 1);
+                let new_tail = self.wrap_sub(self.tail, 1);
 
                 self.copy(new_tail, self.tail, 1);
                 // Already moved the tail, so we only copy `i - 1` elements.
@@ -1040,7 +1054,7 @@ impl<T> VecDeque<T> {
                 //                       M M M
 
                 self.copy(idx + 1, idx, self.head - idx);
-                self.head = self.wrap_index(self.head + 1);
+                self.head = self.wrap_add(self.head, 1);
             },
             (false, true, true) => unsafe {
                 // discontiguous, insert closer to tail, tail section:
@@ -1132,7 +1146,7 @@ impl<T> VecDeque<T> {
         }
 
         // tail might've been changed so we need to recalculate
-        let new_idx = self.wrap_index(self.tail + i);
+        let new_idx = self.wrap_add(self.tail, i);
         unsafe {
             self.buffer_write(new_idx, t);
         }
@@ -1179,7 +1193,7 @@ impl<T> VecDeque<T> {
         //      R - Indicates element that is being removed
         //      M - Indicates element was moved
 
-        let idx = self.wrap_index(self.tail + i);
+        let idx = self.wrap_add(self.tail, i);
 
         let elem = unsafe {
             Some(self.buffer_read(idx))
@@ -1228,7 +1242,7 @@ impl<T> VecDeque<T> {
                 //                               M M
 
                 self.copy(self.tail + 1, self.tail, i);
-                self.tail = self.wrap_index(self.tail + 1);
+                self.tail = self.wrap_add(self.tail, 1);
             },
             (false, false, false) => unsafe {
                 // discontiguous, remove closer to head, head section:
@@ -1274,7 +1288,7 @@ impl<T> VecDeque<T> {
                     self.copy(0, 1, self.head - 1);
                 }
 
-                self.head = self.wrap_index(self.head - 1);
+                self.head = self.wrap_sub(self.head, 1);
             },
             (false, true, false) => unsafe {
                 // discontiguous, remove closer to tail, head section:
@@ -1295,7 +1309,7 @@ impl<T> VecDeque<T> {
                 // move elements from tail to end forward, excluding the last one
                 self.copy(self.tail + 1, self.tail, self.cap - self.tail - 1);
 
-                self.tail = self.wrap_index(self.tail + 1);
+                self.tail = self.wrap_add(self.tail, 1);
             }
         }
 
@@ -1363,7 +1377,7 @@ impl<T> VecDeque<T> {
         }
 
         // Cleanup where the ends of the buffers are
-        self.head = self.wrap_index(self.head - other_len);
+        self.head = self.wrap_sub(self.head, other_len);
         other.head = other.wrap_index(other_len);
 
         other
@@ -1470,7 +1484,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
             return None;
         }
         let tail = self.tail;
-        self.tail = wrap_index(self.tail + 1, self.ring.len());
+        self.tail = wrap_index(self.tail.wrapping_add(1), self.ring.len());
         unsafe { Some(self.ring.get_unchecked(tail)) }
     }
 
@@ -1488,7 +1502,7 @@ impl<'a, T> DoubleEndedIterator for Iter<'a, T> {
         if self.tail == self.head {
             return None;
         }
-        self.head = wrap_index(self.head - 1, self.ring.len());
+        self.head = wrap_index(self.head.wrapping_sub(1), self.ring.len());
         unsafe { Some(self.ring.get_unchecked(self.head)) }
     }
 }
@@ -1509,7 +1523,7 @@ impl<'a, T> RandomAccessIterator for Iter<'a, T> {
         if j >= self.indexable() {
             None
         } else {
-            let idx = wrap_index(self.tail + j, self.ring.len());
+            let idx = wrap_index(self.tail.wrapping_add(j), self.ring.len());
             unsafe { Some(self.ring.get_unchecked(idx)) }
         }
     }
@@ -1538,7 +1552,7 @@ impl<'a, T> Iterator for IterMut<'a, T> {
             return None;
         }
         let tail = self.tail;
-        self.tail = wrap_index(self.tail + 1, self.cap);
+        self.tail = wrap_index(self.tail.wrapping_add(1), self.cap);
 
         unsafe {
             Some(&mut *self.ptr.offset(tail as isize))
@@ -1559,7 +1573,7 @@ impl<'a, T> DoubleEndedIterator for IterMut<'a, T> {
         if self.tail == self.head {
             return None;
         }
-        self.head = wrap_index(self.head - 1, self.cap);
+        self.head = wrap_index(self.head.wrapping_sub(1), self.cap);
 
         unsafe {
             Some(&mut *self.ptr.offset(self.head as isize))
