@@ -15,7 +15,7 @@
 #![stable(feature = "rust1", since = "1.0.0")]
 #![allow(missing_docs)]
 
-use self::wrapping::WrappingOps;
+use self::wrapping::{OverflowingOps, WrappingOps};
 
 use char::CharExt;
 use clone::Clone;
@@ -53,6 +53,8 @@ pub trait Int
     + BitXor<Output=Self>
     + Shl<uint, Output=Self>
     + Shr<uint, Output=Self>
+    + WrappingOps
+    + OverflowingOps
 {
     /// Returns the `0` value of this integer type.
     // FIXME (#5527): Should be an associated constant
@@ -380,11 +382,23 @@ pub trait Int
     fn pow(self, mut exp: uint) -> Self {
         let mut base = self;
         let mut acc: Self = Int::one();
+        let mut prev_base = self;
+        let mut base_oflo = false;
         while exp > 0 {
             if (exp & 1) == 1 {
-                acc = acc * base;
+                if base_oflo {
+                    // ensure overflow occurs in the same manner it
+                    // would have otherwise (i.e. signal any exception
+                    // it would have otherwise).
+                    acc = acc * (prev_base * prev_base);
+                } else {
+                    acc = acc * base;
+                }
             }
-            base = base * base;
+            prev_base = base;
+            let (new_base, new_base_oflo) = base.overflowing_mul(base);
+            base = new_base;
+            base_oflo = new_base_oflo;
             exp /= 2;
         }
         acc
