@@ -808,7 +808,7 @@ impl<T> VecDeque<T> {
             debug_assert!(!self.is_full());
         }
 
-        self.tail = self.wrap_index(self.tail - 1);
+        self.tail = self.wrap_index(self.tail.wrapping_sub(1));
         let tail = self.tail;
         unsafe { self.buffer_write(tail, t); }
     }
@@ -1438,7 +1438,7 @@ fn wrap_index(index: usize, size: usize) -> usize {
 #[inline]
 fn count(tail: usize, head: usize, size: usize) -> usize {
     // size is always a power of 2
-    (head - tail) & (size - 1)
+    (head.wrapping_sub(tail)) & (size - 1)
 }
 
 /// `VecDeque` iterator.
