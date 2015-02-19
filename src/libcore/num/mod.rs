@@ -15,6 +15,8 @@
 #![stable(feature = "rust1", since = "1.0.0")]
 #![allow(missing_docs)]
 
+use self::wrapping::WrappingOps;
+
 use char::CharExt;
 use clone::Clone;
 use cmp::{PartialEq, Eq, PartialOrd, Ord};
@@ -693,12 +695,12 @@ signed_int_impl! { int }
 
 /// A built-in unsigned integer.
 #[stable(feature = "rust1", since = "1.0.0")]
-pub trait UnsignedInt: Int {
+pub trait UnsignedInt: Int + WrappingOps {
     /// Returns `true` iff `self == 2^k` for some `k`.
     #[stable(feature = "rust1", since = "1.0.0")]
     #[inline]
     fn is_power_of_two(self) -> bool {
-        (self - Int::one()) & self == Int::zero() && !(self == Int::zero())
+        (self.wrapping_sub(Int::one())) & self == Int::zero() && !(self == Int::zero())
     }
 
     /// Returns the smallest power of two greater than or equal to `self`.
@@ -708,7 +710,7 @@ pub trait UnsignedInt: Int {
     fn next_power_of_two(self) -> Self {
         let bits = size_of::<Self>() * 8;
         let one: Self = Int::one();
-        one << ((bits - (self - one).leading_zeros()) % bits)
+        one << ((bits - self.wrapping_sub(one).leading_zeros()) % bits)
     }
 
     /// Returns the smallest power of two greater than or equal to `n`. If the
