@@ -22,7 +22,9 @@ trait Private<P: Pt, R: Rt> {
 pub trait Public: Private<
     <Self as Public>::P,
 //~^ ERROR illegal recursive type; insert an enum or struct in the cycle, if this is desired
+//~| ERROR illegal recursive type; insert an enum or struct in the cycle, if this is desired
     <Self as Public>::R
+//~^ ERROR illegal recursive type; insert an enum or struct in the cycle, if this is desired
 > {
     type P;
     type R;
