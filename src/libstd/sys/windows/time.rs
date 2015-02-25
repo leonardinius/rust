@@ -24,7 +24,33 @@ impl SteadyTime {
     }
 
     pub fn ns(&self) -> u64 {
-        self.t as u64 * 1_000_000_000 / frequency() as u64
+        // Want to multiply self.t by the ratio `1_000_000_000 / frequency()`,
+        // but want to avoid overflow on the multiply.
+        // Solution: split self.t into separate high- and low-order parts:
+        // T = A * 2^32 + B
+        //
+        // (A * 2^32   +   B) * G / F
+        // =
+        // A * G / F * 2^32   +   B * G / F
+        // =
+        // (A * G div F + A * G rem F / F) * 2^32  +  B * G / F
+        // =
+        // A * G div F * 2^32  +  A * G rem F * 2^32 / F  +  B * G / F
+        // =
+        // A * G div F * 2^32  +  (A * G rem F * 2^32  +  B * G) / F
+        // ~~~~~~~~~~~~~~~~~~     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // hi                     lo
+
+        let f = frequency() as u64;
+        let g = 1_000_000_000;
+        let a = (self.t as u64) >> 32;
+        let b = (self.t as u64) & 0xFFFF_FFFF;
+        let ag = a * g;
+
+        let hi = ag / f << 32;
+        let lo = ((ag % f << 32) + b * g) / f;
+
+        hi + lo
     }
 }
 
